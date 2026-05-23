@@ -28,4 +28,38 @@ for target in $TARGETS; do
   node "$launcher" --version >/dev/null
 done
 
+if [[ " $TARGETS " == *" firtool "* ]]; then
+  echo "Smoke testing firtool FIRRTL lowering"
+  firtool_output="$(
+    node "$WASM_BUILD_DIR/bin/firtool.js" \
+      --disable-all-randomization \
+      --strip-debug-info \
+      -format=fir - <<'FIR'
+FIRRTL version 4.0.0
+circuit FIRFilter:
+  public module FIRFilter:
+    input clock: Clock
+    input in: UInt<8>
+    output out: UInt<11>
+
+    reg x1: UInt<8>, clock
+    reg x2: UInt<8>, clock
+
+    connect x1, in
+    connect x2, x1
+
+    node tap0 = pad(in, 11)
+    node tap1 = mul(pad(x1, 11), UInt<2>(2))
+    node tap2 = mul(pad(x2, 11), UInt<2>(3))
+    node sum01 = add(tap0, tap1)
+    node sum = add(sum01, tap2)
+    connect out, bits(sum, 10, 0)
+FIR
+  )"
+  if [[ "$firtool_output" != *"module FIRFilter"* ]]; then
+    echo "error: firtool sample did not emit FIRFilter Verilog" >&2
+    exit 1
+  fi
+fi
+
 echo "Smoke tests passed"

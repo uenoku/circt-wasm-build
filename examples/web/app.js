@@ -3,7 +3,7 @@ const examples = {
     title: "FIRRTL",
     language: "firrtl",
     file: "input.fir",
-    args: "",
+    args: "--disable-all-randomization --strip-debug-info",
     source: `FIRRTL version 4.0.0
 circuit FIRFilter:
   public module FIRFilter:
