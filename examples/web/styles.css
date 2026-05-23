@@ -101,7 +101,7 @@ button:disabled {
 
 .segmented {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(92px, 1fr));
+  grid-template-columns: repeat(3, minmax(92px, 1fr));
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;

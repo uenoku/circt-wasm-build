@@ -9,7 +9,7 @@ on:
     inputs:
       targets:
         description: CMake targets to build
-        default: "circt-opt firtool"
+        default: "circt-opt firtool circt-synth"
         required: false
       emsdk-version:
         description: Emscripten SDK version
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      CIRCT_WASM_TARGETS: ${{ github.event.inputs.targets || 'circt-opt firtool' }}
+      CIRCT_WASM_TARGETS: ${{ github.event.inputs.targets || 'circt-opt firtool circt-synth' }}
       EMSDK_VERSION: ${{ github.event.inputs['emsdk-version'] || 'latest' }}
       CMAKE_BUILD_PARALLEL_LEVEL: 8
       LLVM_ENABLE_ASSERTIONS: ON
@@ -83,4 +83,6 @@ jobs:
             build/wasm/bin/circt-opt.wasm
             build/wasm/bin/firtool.js
             build/wasm/bin/firtool.wasm
+            build/wasm/bin/circt-synth.js
+            build/wasm/bin/circt-synth.wasm
           if-no-files-found: error

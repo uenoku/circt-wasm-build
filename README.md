@@ -22,7 +22,9 @@ git submodule update --init --recursive
 ./scripts/smoke-test.sh
 ```
 
-By default this builds `circt-opt` and `firtool` into `build/wasm/bin`.
+By default this builds `circt-opt`, `firtool`, and `circt-synth` into
+`build/wasm/bin`. The Emscripten build enables CIRCT's CaDiCaL integration by
+default, which gives synthesis passes an in-process SAT solver.
 
 ## Configuration
 
@@ -30,7 +32,8 @@ The scripts are configured through environment variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `CIRCT_WASM_TARGETS` | `circt-opt firtool` | CMake targets to build. |
+| `CIRCT_WASM_TARGETS` | `circt-opt firtool circt-synth` | CMake targets to build. |
+| `CIRCT_CADICAL_ENABLED` | `ON` | Enable CIRCT's CaDiCaL SAT solver in the Emscripten build. |
 | `CIRCT_WASM_BUILD_DIR` | `build/wasm` | Emscripten build directory. |
 | `CIRCT_WASM_HOST_BUILD_DIR` | `build/host` | Native build directory for tablegen tools. |
 | `CIRCT_WASM_PATCH_DIR` | `patches` | Patch directory applied to the CIRCT submodule before build. |
@@ -43,7 +46,7 @@ The scripts are configured through environment variables:
 Example:
 
 ```sh
-CIRCT_WASM_TARGETS="circt-opt firtool circt-translate" ./scripts/build-wasm.sh
+CIRCT_WASM_TARGETS="circt-opt firtool circt-synth circt-translate" ./scripts/build-wasm.sh
 ```
 
 The generated tools are Node-compatible Emscripten launchers, for example:

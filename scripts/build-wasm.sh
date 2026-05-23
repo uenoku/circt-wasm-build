@@ -7,7 +7,8 @@ HOST_BUILD_DIR="${CIRCT_WASM_HOST_BUILD_DIR:-$ROOT_DIR/build/host}"
 WASM_BUILD_DIR="${CIRCT_WASM_BUILD_DIR:-$ROOT_DIR/build/wasm}"
 BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 ASSERTIONS="${LLVM_ENABLE_ASSERTIONS:-ON}"
-TARGETS="${CIRCT_WASM_TARGETS:-circt-opt firtool}"
+TARGETS="${CIRCT_WASM_TARGETS:-circt-opt firtool circt-synth}"
+CADICAL_ENABLED="${CIRCT_CADICAL_ENABLED:-ON}"
 
 if ! command -v cmake >/dev/null 2>&1; then
   echo "error: cmake is required" >&2
@@ -136,7 +137,8 @@ emcmake cmake \
   -DLLVM_ENABLE_ZLIB=OFF \
   -DLLVM_ENABLE_ZSTD=OFF \
   -DMLIR_ENABLE_BINDINGS_PYTHON=OFF \
-  -DMLIR_ENABLE_EXECUTION_ENGINE=OFF
+  -DMLIR_ENABLE_EXECUTION_ENGINE=OFF \
+  -DCIRCT_CADICAL_ENABLED="$CADICAL_ENABLED"
 
 # CIRCT's unified build resets MLIR_TABLEGEN_EXE to the target mlir-tblgen.
 # Seed those target paths with native binaries so tablegen custom commands can

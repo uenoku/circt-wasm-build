@@ -12,5 +12,5 @@ Serve the repository root, then open `examples/web/`:
 python3 -m http.server 8000
 ```
 
-The page expects `build/wasm/bin/firtool.js`, `firtool.wasm`,
-`circt-opt.js`, and `circt-opt.wasm` to exist.
+The page expects `firtool`, `circt-opt`, and `circt-synth` launchers and wasm
+payloads to exist under `build/wasm/bin`.

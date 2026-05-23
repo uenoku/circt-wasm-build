@@ -36,6 +36,16 @@ circuit FIRFilter:
 }
 `,
   },
+  "circt-synth": {
+    title: "Synthesis MLIR",
+    file: "input.mlir",
+    args: "--top add16 --enable-sop-balancing --convert-to-comb --analysis-output=-",
+    source: `hw.module @add16(in %arg0: i16, in %arg1: i16, out add: i16) {
+  %0 = comb.add %arg0, %arg1 : i16
+  hw.output %0 : i16
+}
+`,
+  },
 };
 
 const state = {
