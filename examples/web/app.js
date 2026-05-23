@@ -16,7 +16,7 @@ const examples = {
     file: "input.mlir",
     args: "",
     source: `module {
-  hw.module @Top(output out: i1) {
+  hw.module @Top(out out: i1) {
     %true = hw.constant true
     hw.output %true : i1
   }

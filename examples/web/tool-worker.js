@@ -4,10 +4,15 @@ self.onmessage = (event) => {
   const stdout = [];
   const stderr = [];
   let finished = false;
+  const timeout = setTimeout(() => {
+    stderr.push("Tool did not exit after 120 seconds.");
+    finish(1);
+  }, 120000);
 
   function finish(code) {
     if (finished) return;
     finished = true;
+    clearTimeout(timeout);
     self.postMessage({
       type: "result",
       code,
@@ -44,7 +49,6 @@ self.onmessage = (event) => {
 
   try {
     importScripts(`${base}${tool}.js`);
-    finish(0);
   } catch (error) {
     const code = typeof error.status === "number" ? error.status : 1;
     if (!finished) stderr.push(error && error.message ? error.message : String(error));
