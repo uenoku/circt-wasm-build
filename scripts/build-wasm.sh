@@ -103,6 +103,15 @@ for tool in llvm-tblgen mlir-tblgen circt-tblgen; do
   cmake -E copy_if_different "$HOST_BUILD_DIR/bin/$tool" "$HOST_BUILD_DIR/bin/$tool.js"
 done
 
+seed_wasm_tablegen_tools() {
+  cmake -E make_directory "$WASM_BUILD_DIR/bin" "$WASM_BUILD_DIR/NATIVE/bin"
+  for tool in llvm-tblgen mlir-tblgen circt-tblgen; do
+    cmake -E copy_if_different "$HOST_BUILD_DIR/bin/$tool" "$WASM_BUILD_DIR/bin/$tool.js"
+    cmake -E copy_if_different "$HOST_BUILD_DIR/bin/$tool" "$WASM_BUILD_DIR/NATIVE/bin/$tool.js"
+    chmod +x "$WASM_BUILD_DIR/bin/$tool.js" "$WASM_BUILD_DIR/NATIVE/bin/$tool.js"
+  done
+}
+
 WASM_LINK_FLAGS="${CIRCT_WASM_LINK_FLAGS:--sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sENVIRONMENT=web,worker,node}"
 WASM_CXX_FLAGS="${CIRCT_WASM_CXX_FLAGS:-${CMAKE_CXX_FLAGS:-} -Wno-c++11-narrowing}"
 export EM_CACHE="${EM_CACHE:-$ROOT_DIR/.cache/emscripten}"
@@ -145,26 +154,18 @@ emcmake cmake \
 # Seed those target paths with native binaries so tablegen custom commands can
 # execute directly under Ninja, matching the workaround used by MLIR Emscripten
 # builds.
-cmake -E make_directory "$WASM_BUILD_DIR/bin" "$WASM_BUILD_DIR/NATIVE/bin"
-for tool in llvm-tblgen mlir-tblgen circt-tblgen; do
-  cmake -E copy_if_different "$HOST_BUILD_DIR/bin/$tool" "$WASM_BUILD_DIR/bin/$tool.js"
-  cmake -E copy_if_different "$HOST_BUILD_DIR/bin/$tool" "$WASM_BUILD_DIR/NATIVE/bin/$tool.js"
-  chmod +x "$WASM_BUILD_DIR/bin/$tool.js" "$WASM_BUILD_DIR/NATIVE/bin/$tool.js"
-done
+seed_wasm_tablegen_tools
 
 echo "Building native MLIR helper tools for cross build"
 cmake --build "$WASM_BUILD_DIR" \
   --target CONFIGURE_LLVM_NATIVE \
   "${PARALLEL_ARGS[@]}"
+seed_wasm_tablegen_tools
 cmake --build "$WASM_BUILD_DIR/NATIVE" \
   --target mlir-linalg-ods-yaml-gen \
   "${PARALLEL_ARGS[@]}"
 
-for tool in llvm-tblgen mlir-tblgen circt-tblgen; do
-  cmake -E copy_if_different "$HOST_BUILD_DIR/bin/$tool" "$WASM_BUILD_DIR/bin/$tool.js"
-  cmake -E copy_if_different "$HOST_BUILD_DIR/bin/$tool" "$WASM_BUILD_DIR/NATIVE/bin/$tool.js"
-  chmod +x "$WASM_BUILD_DIR/bin/$tool.js" "$WASM_BUILD_DIR/NATIVE/bin/$tool.js"
-done
+seed_wasm_tablegen_tools
 
 cmake -E copy_if_different \
   "$WASM_BUILD_DIR/NATIVE/bin/mlir-linalg-ods-yaml-gen" \
