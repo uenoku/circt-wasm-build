@@ -25,7 +25,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -90,7 +91,7 @@ button:disabled {
 
 .toolbar {
   display: grid;
-  grid-template-columns: auto minmax(180px, 320px) minmax(240px, 1fr);
+  grid-template-columns: auto minmax(140px, 220px) minmax(180px, 320px) minmax(240px, 1fr);
   align-items: end;
   gap: 12px;
   padding: 12px 24px;
@@ -130,7 +131,8 @@ label {
   font-size: 12px;
 }
 
-input {
+input,
+select {
   width: 100%;
   min-height: 34px;
   border: 1px solid var(--border);

@@ -91,12 +91,14 @@ const status = document.querySelector("#status");
 const runButton = document.querySelector("#run");
 const resetButton = document.querySelector("#reset");
 const argsInput = document.querySelector("#args");
+const versionSelect = document.querySelector("#version");
 const toolBaseInput = document.querySelector("#tool-base");
 const inputTitle = document.querySelector("#input-title");
 const toolButtons = [...document.querySelectorAll("[data-tool]")];
 const copyOutputButtons = [...document.querySelectorAll("[data-copy-output]")];
 
-toolBaseInput.value = new URL("../../build/wasm/bin/", window.location.href).href;
+const localToolBase = new URL("../../build/wasm/bin/", window.location.href).href;
+toolBaseInput.value = localToolBase;
 
 function defineEditorModes() {
   const codeMirror = window.CodeMirror;
@@ -187,6 +189,56 @@ function setSourceText(value) {
 function setEditorLanguage(language) {
   if (editor)
     editor.setOption("mode", editorModes[language] || editorModes.mlir);
+}
+
+function setVersion(version) {
+  if (version?.path)
+    toolBaseInput.value = new URL(`../../${version.path}`, window.location.href).href;
+  else
+    toolBaseInput.value = localToolBase;
+}
+
+async function loadVersionManifest() {
+  const manifestUrl = new URL("../../wasm/manifest.json", window.location.href);
+  let manifest;
+
+  try {
+    const response = await fetch(manifestUrl, { cache: "no-store" });
+    if (!response.ok)
+      throw new Error(`HTTP ${response.status}`);
+    manifest = await response.json();
+  } catch {
+    versionSelect.disabled = true;
+    setVersion(null);
+    return;
+  }
+
+  const versions = Array.isArray(manifest.versions) ? manifest.versions : [];
+  if (versions.length === 0) {
+    versionSelect.disabled = true;
+    setVersion(null);
+    return;
+  }
+
+  versionSelect.innerHTML = "";
+  for (const version of versions) {
+    const option = document.createElement("option");
+    option.value = version.id;
+    option.textContent = version.label || version.id;
+    option.title = version.circtRef || "";
+    versionSelect.append(option);
+  }
+
+  const selectedId = versions.some((version) => version.id === manifest.default)
+    ? manifest.default
+    : versions[0].id;
+  versionSelect.value = selectedId;
+  versionSelect.disabled = false;
+  setVersion(versions.find((version) => version.id === selectedId));
+
+  versionSelect.addEventListener("change", () => {
+    setVersion(versions.find((version) => version.id === versionSelect.value));
+  });
 }
 
 function parseArgs(value) {
@@ -288,3 +340,4 @@ runButton.addEventListener("click", runTool);
 resetButton.addEventListener("click", () => setTool(state.tool));
 
 setTool(state.tool);
+loadVersionManifest();

@@ -61,6 +61,16 @@ The generated launchers are also browser-compatible. A small in-browser runner
 is available under `examples/web`; serve the repository root over HTTP and open
 that directory after building.
 
+The GitHub Pages workflow publishes tools under versioned paths such as
+`wasm/current/bin/` and records them in `wasm/manifest.json`. The web runner
+uses that manifest to offer a version selector, while local development falls
+back to `build/wasm/bin/`.
+
+To publish a specific CIRCT release, run the `WASM` workflow manually with
+`circt-ref` set to a CIRCT tag, branch, or SHA and `release-label` set to the
+label that should appear in the web UI. Each deployment preserves versions from
+the existing Pages manifest when those artifacts are still reachable.
+
 The wasm `arcilator` target supports compiler output such as `--emit-llvm` and
 `--emit-mlir`. `arcilator --run` requires CIRCT's native MLIR execution engine
 and LLVM ORC JIT, which are not available in the Emscripten/browser build.

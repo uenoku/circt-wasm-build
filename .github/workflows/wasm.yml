@@ -15,6 +15,14 @@ on:
         description: Emscripten SDK version
         default: latest
         required: false
+      circt-ref:
+        description: CIRCT git ref, tag, branch, or SHA to build
+        default: ""
+        required: false
+      release-label:
+        description: Version label to publish on Pages
+        default: ""
+        required: false
       deploy-pages:
         description: Deploy the built web page to GitHub Pages
         default: true
@@ -36,6 +44,7 @@ jobs:
     env:
       CIRCT_WASM_TARGETS: ${{ github.event.inputs.targets || 'circt-opt firtool circt-synth circt-verilog arcilator' }}
       EMSDK_VERSION: ${{ github.event.inputs['emsdk-version'] || 'latest' }}
+      CIRCT_REF: ${{ inputs['circt-ref'] || '' }}
       CMAKE_BUILD_PARALLEL_LEVEL: 8
       LLVM_ENABLE_ASSERTIONS: ON
 
@@ -44,6 +53,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Select CIRCT ref
+        if: ${{ env.CIRCT_REF != '' }}
+        shell: bash
+        run: |
+          git -C circt fetch --tags origin
+          git -C circt checkout --detach "${CIRCT_REF}"
+          git -C circt submodule update --init --recursive
 
       - name: Install host packages
         run: |
@@ -55,8 +72,6 @@ jobs:
         with:
           path: build/host
           key: host-tablegen-${{ runner.os }}-${{ env.LLVM_ENABLE_ASSERTIONS }}-${{ hashFiles('circt/.git', '.git/modules/circt/HEAD', 'scripts/build-wasm.sh', 'patches/*.patch') }}
-          restore-keys: |
-            host-tablegen-${{ runner.os }}-${{ env.LLVM_ENABLE_ASSERTIONS }}-
 
       - name: Cache Emscripten SDK
         uses: actions/cache@v4
@@ -111,7 +126,7 @@ jobs:
     name: Deploy Pages
     runs-on: ubuntu-24.04
     needs: build
-    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy-pages) }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs['deploy-pages']) }}
     permissions:
       contents: read
       pages: write
@@ -132,27 +147,18 @@ jobs:
 
       - name: Prepare Pages artifact
         shell: bash
+        env:
+          VERSION_LABEL: ${{ inputs['release-label'] || inputs['circt-ref'] || 'current' }}
+          CIRCT_REF: ${{ inputs['circt-ref'] || 'submodule' }}
+          PREVIOUS_PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: |
-          rm -rf _site
-          mkdir -p _site/examples _site/build/wasm/bin
-          cp -R examples/web _site/examples/
-          cp build/wasm/bin/*.js _site/build/wasm/bin/
-          cp build/wasm/bin/*.wasm _site/build/wasm/bin/
-          touch _site/.nojekyll
-          cat > _site/index.html <<'HTML'
-          <!doctype html>
-          <html lang="en">
-            <head>
-              <meta charset="utf-8">
-              <meta http-equiv="refresh" content="0; url=examples/web/">
-              <title>CIRCT WASM Runner</title>
-              <link rel="canonical" href="examples/web/">
-            </head>
-            <body>
-              <p><a href="examples/web/">Open CIRCT WASM Runner</a></p>
-            </body>
-          </html>
-          HTML
+          python3 scripts/prepare-pages-site.py \
+            --site-dir _site \
+            --web-dir examples/web \
+            --bin-dir build/wasm/bin \
+            --version-label "${VERSION_LABEL}" \
+            --circt-ref "${CIRCT_REF}" \
+            --previous-base-url "${PREVIOUS_PAGES_URL}"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
