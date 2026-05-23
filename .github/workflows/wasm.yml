@@ -15,6 +15,14 @@ on:
         description: Emscripten SDK version
         default: latest
         required: false
+      deploy-pages:
+        description: Deploy the built web page to GitHub Pages
+        default: true
+        required: false
+        type: boolean
+
+permissions:
+  contents: read
 
 concurrency:
   group: wasm-${{ github.workflow }}-${{ github.ref }}
@@ -98,3 +106,64 @@ jobs:
             build/wasm/bin/arcilator.js
             build/wasm/bin/arcilator.wasm
           if-no-files-found: error
+
+  deploy-pages:
+    name: Deploy Pages
+    runs-on: ubuntu-24.04
+    needs: build
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.deploy-pages) }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download WASM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: circt-wasm
+          path: build/wasm/bin
+
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          rm -rf _site
+          mkdir -p _site/examples _site/build/wasm/bin
+          cp -R examples/web _site/examples/
+          cp build/wasm/bin/*.js _site/build/wasm/bin/
+          cp build/wasm/bin/*.wasm _site/build/wasm/bin/
+          touch _site/.nojekyll
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta http-equiv="refresh" content="0; url=examples/web/">
+              <title>CIRCT WASM Runner</title>
+              <link rel="canonical" href="examples/web/">
+            </head>
+            <body>
+              <p><a href="examples/web/">Open CIRCT WASM Runner</a></p>
+            </body>
+          </html>
+          HTML
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
