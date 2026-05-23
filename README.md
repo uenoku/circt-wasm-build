@@ -22,8 +22,8 @@ git submodule update --init --recursive
 ./scripts/smoke-test.sh
 ```
 
-By default this builds `circt-opt`, `firtool`, `circt-synth`, and
-`circt-verilog` into `build/wasm/bin`. The Emscripten build enables CIRCT's
+By default this builds `circt-opt`, `firtool`, `circt-synth`, `circt-verilog`,
+and `arcilator` into `build/wasm/bin`. The Emscripten build enables CIRCT's
 CaDiCaL integration by default, which gives synthesis passes an in-process SAT
 solver. It also enables the slang-backed Verilog frontend by default.
 
@@ -33,7 +33,7 @@ The scripts are configured through environment variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `CIRCT_WASM_TARGETS` | `circt-opt firtool circt-synth circt-verilog` | CMake targets to build. |
+| `CIRCT_WASM_TARGETS` | `circt-opt firtool circt-synth circt-verilog arcilator` | CMake targets to build. |
 | `CIRCT_CADICAL_ENABLED` | `ON` | Enable CIRCT's CaDiCaL SAT solver in the Emscripten build. |
 | `CIRCT_SLANG_FRONTEND_ENABLED` | `ON` | Enable CIRCT's slang-backed Verilog frontend in the Emscripten build. |
 | `CIRCT_WASM_BUILD_DIR` | `build/wasm` | Emscripten build directory. |
@@ -48,7 +48,7 @@ The scripts are configured through environment variables:
 Example:
 
 ```sh
-CIRCT_WASM_TARGETS="circt-opt firtool circt-synth circt-verilog circt-translate" ./scripts/build-wasm.sh
+CIRCT_WASM_TARGETS="circt-opt firtool circt-synth circt-verilog arcilator circt-translate" ./scripts/build-wasm.sh
 ```
 
 The generated tools are Node-compatible Emscripten launchers, for example:
@@ -60,6 +60,10 @@ node build/wasm/bin/circt-opt.js --version
 The generated launchers are also browser-compatible. A small in-browser runner
 is available under `examples/web`; serve the repository root over HTTP and open
 that directory after building.
+
+The wasm `arcilator` target supports compiler output such as `--emit-llvm` and
+`--emit-mlir`. `arcilator --run` requires CIRCT's native MLIR execution engine
+and LLVM ORC JIT, which are not available in the Emscripten/browser build.
 
 ## Local CIRCT Patches
 

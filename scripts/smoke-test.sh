@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WASM_BUILD_DIR="${CIRCT_WASM_BUILD_DIR:-$ROOT_DIR/build/wasm}"
-TARGETS="${CIRCT_WASM_TARGETS:-circt-opt firtool circt-synth circt-verilog}"
+TARGETS="${CIRCT_WASM_TARGETS:-circt-opt firtool circt-synth circt-verilog arcilator}"
 
 if ! command -v node >/dev/null 2>&1; then
   echo "error: node is required to run Emscripten outputs" >&2
