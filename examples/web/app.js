@@ -1,6 +1,7 @@
 const examples = {
   "firtool": {
     title: "FIRRTL",
+    language: "firrtl",
     file: "input.fir",
     args: "",
     source: `FIRRTL version 4.0.0
@@ -26,6 +27,7 @@ circuit FIRFilter:
   },
   "circt-opt": {
     title: "MLIR",
+    language: "mlir",
     file: "input.mlir",
     args: "",
     source: `module {
@@ -38,6 +40,7 @@ circuit FIRFilter:
   },
   "circt-synth": {
     title: "Synthesis MLIR",
+    language: "mlir",
     file: "input.mlir",
     args: "--top add16 --enable-sop-balancing --convert-to-comb --analysis-output=-",
     source: `hw.module @add16(in %arg0: i16, in %arg1: i16, out add: i16) {
@@ -48,6 +51,7 @@ circuit FIRFilter:
   },
   "circt-verilog": {
     title: "SystemVerilog",
+    language: "sv",
     file: "input.sv",
     args: "--format=sv --ir-hw",
     source: `module add4(
@@ -61,6 +65,7 @@ endmodule
   },
   "arcilator": {
     title: "HW MLIR",
+    language: "mlir",
     file: "input.mlir",
     args: "--emit-llvm",
     source: `hw.module @Top(in %clock : !seq.clock, in %i0 : i4, in %i1 : i4, out out : i4) {
@@ -81,6 +86,7 @@ const state = {
 };
 
 const source = document.querySelector("#source");
+const sourceHighlight = document.querySelector("#source-highlight");
 const output = document.querySelector("#output");
 const status = document.querySelector("#status");
 const runButton = document.querySelector("#run");
@@ -91,6 +97,130 @@ const inputTitle = document.querySelector("#input-title");
 const toolButtons = [...document.querySelectorAll("[data-tool]")];
 
 toolBaseInput.value = new URL("../../build/wasm/bin/", window.location.href).href;
+
+const keywordSets = {
+  firrtl: new Set([
+    "FIRRTL",
+    "version",
+    "circuit",
+    "module",
+    "public",
+    "input",
+    "output",
+    "reg",
+    "wire",
+    "node",
+    "connect",
+    "when",
+    "else",
+    "skip",
+    "stop",
+    "printf",
+    "UInt",
+    "SInt",
+    "Clock",
+    "AsyncReset",
+    "Reset",
+  ]),
+  mlir: new Set([
+    "module",
+    "func",
+    "hw.module",
+    "hw.output",
+    "hw.constant",
+    "comb.add",
+    "comb.mul",
+    "comb.xor",
+    "seq.compreg",
+    "in",
+    "out",
+    "true",
+    "false",
+  ]),
+  sv: new Set([
+    "module",
+    "endmodule",
+    "input",
+    "output",
+    "wire",
+    "logic",
+    "assign",
+    "always_comb",
+    "always_ff",
+    "begin",
+    "end",
+    "if",
+    "else",
+    "case",
+    "endcase",
+    "parameter",
+    "localparam",
+  ]),
+};
+
+function escapeHtml(value) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function span(className, value) {
+  return `<span class="${className}">${escapeHtml(value)}</span>`;
+}
+
+function highlightToken(token, language) {
+  const keywords = keywordSets[language] || keywordSets.mlir;
+
+  if (/^".*"$/.test(token) || /^'.*'$/.test(token))
+    return span("tok-string", token);
+  if (/^(%|@|#)[A-Za-z_.$-][\w.$-]*$/.test(token))
+    return span("tok-symbol", token);
+  if (/^!?[A-Za-z_][\w.$-]*\.[A-Za-z_][\w.$-]*$/.test(token))
+    return span("tok-dialect", token);
+  if (/^!?[is]?u?int<\d+>$|^!?seq\.clock$|^i\d+$|^UInt<\d+>$|^SInt<\d+>$/.test(token))
+    return span("tok-type", token);
+  if (/^(?:\d+|'[01xz]+|[A-Za-z_][\w$]*'\([^)]+\))$/.test(token))
+    return span("tok-number", token);
+  if (keywords.has(token))
+    return span("tok-keyword", token);
+  return escapeHtml(token);
+}
+
+function highlightLine(line, language) {
+  const commentStart = language === "firrtl" ? line.indexOf(";") : line.indexOf("//");
+  const code = commentStart >= 0 ? line.slice(0, commentStart) : line;
+  const comment = commentStart >= 0 ? line.slice(commentStart) : "";
+  const tokenPattern = /"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|[%@#]?[A-Za-z_.$][\w.$-]*(?:\.[A-Za-z_][\w.$-]*)?|!?[A-Za-z_][\w.$-]*<\d+>|!?seq\.clock|i\d+|\d+|[^\s]/g;
+  let html = "";
+  let index = 0;
+  let match;
+
+  while ((match = tokenPattern.exec(code)) !== null) {
+    html += escapeHtml(code.slice(index, match.index));
+    html += highlightToken(match[0], language);
+    index = match.index + match[0].length;
+  }
+
+  html += escapeHtml(code.slice(index));
+  if (comment)
+    html += span("tok-comment", comment);
+  return html;
+}
+
+function updateHighlight() {
+  const language = examples[state.tool].language;
+  const highlighted = source.value
+    .split("\n")
+    .map((line) => highlightLine(line, language))
+    .join("\n");
+  sourceHighlight.innerHTML = `${highlighted}\n`;
+}
+
+function syncHighlightScroll() {
+  sourceHighlight.scrollTop = source.scrollTop;
+  sourceHighlight.scrollLeft = source.scrollLeft;
+}
 
 function parseArgs(value) {
   const matches = value.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
@@ -111,6 +241,8 @@ function setTool(tool) {
   inputTitle.textContent = example.title;
   argsInput.value = example.args;
   source.value = example.source;
+  updateHighlight();
+  syncHighlightScroll();
   output.textContent = "";
   status.textContent = "Idle";
 }
@@ -163,6 +295,8 @@ toolButtons.forEach((button) => {
   button.addEventListener("click", () => setTool(button.dataset.tool));
 });
 
+source.addEventListener("input", updateHighlight);
+source.addEventListener("scroll", syncHighlightScroll);
 runButton.addEventListener("click", runTool);
 resetButton.addEventListener("click", () => setTool(state.tool));
 

@@ -176,14 +176,26 @@ input {
   font-weight: 650;
 }
 
-textarea,
-pre {
+.editor-shell {
+  position: relative;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  background: var(--code);
+}
+
+textarea,
+pre,
+.editor-shell {
+  min-width: 0;
+  min-height: 0;
+}
+
+textarea,
+pre {
   margin: 0;
   border: 0;
   padding: 14px;
-  resize: none;
   overflow: auto;
   background: var(--code);
   color: #e8edf2;
@@ -194,9 +206,59 @@ pre {
   white-space: pre;
 }
 
+textarea {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  resize: none;
+  color: transparent;
+  caret-color: #e8edf2;
+  background: transparent;
+}
+
+#source-highlight {
+  width: 100%;
+  height: 100%;
+  color: #e8edf2;
+  pointer-events: none;
+}
+
+textarea::selection {
+  background: rgba(123, 187, 174, 0.35);
+}
+
 textarea:focus {
   outline: 2px solid #7bbbae;
   outline-offset: -2px;
+}
+
+.tok-keyword {
+  color: #80cbc4;
+}
+
+.tok-dialect {
+  color: #82aaff;
+}
+
+.tok-type {
+  color: #c3e88d;
+}
+
+.tok-number {
+  color: #f78c6c;
+}
+
+.tok-string {
+  color: #ecc48d;
+}
+
+.tok-comment {
+  color: #697a8d;
+}
+
+.tok-symbol {
+  color: #c792ea;
 }
 
 @media (max-width: 820px) {
