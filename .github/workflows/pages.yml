@@ -1,0 +1,120 @@
+name: Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      emsdk-version:
+        description: Emscripten SDK version
+        default: latest
+        required: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Pages Artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CIRCT_WASM_TARGETS: circt-opt firtool circt-synth circt-verilog
+      EMSDK_VERSION: ${{ github.event.inputs['emsdk-version'] || 'latest' }}
+      CMAKE_BUILD_PARALLEL_LEVEL: 8
+      LLVM_ENABLE_ASSERTIONS: ON
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install host packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build python3 git ca-certificates
+
+      - name: Cache Emscripten SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/emsdk
+            .cache/emscripten
+          key: emsdk-${{ runner.os }}-${{ env.EMSDK_VERSION }}
+
+      - name: Install Emscripten SDK
+        shell: bash
+        run: |
+          if [[ ! -d "${RUNNER_TEMP}/emsdk/.git" ]]; then
+            rm -rf "${RUNNER_TEMP}/emsdk"
+            git clone https://github.com/emscripten-core/emsdk.git "${RUNNER_TEMP}/emsdk"
+          else
+            git -C "${RUNNER_TEMP}/emsdk" pull --ff-only
+          fi
+          "${RUNNER_TEMP}/emsdk/emsdk" install "${EMSDK_VERSION}"
+          "${RUNNER_TEMP}/emsdk/emsdk" activate "${EMSDK_VERSION}"
+
+      - name: Build WASM tools
+        shell: bash
+        run: |
+          source "${RUNNER_TEMP}/emsdk/emsdk_env.sh"
+          ./scripts/build-wasm.sh
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          source "${RUNNER_TEMP}/emsdk/emsdk_env.sh"
+          ./scripts/smoke-test.sh
+
+      - name: Prepare Pages artifact
+        shell: bash
+        run: |
+          rm -rf _site
+          mkdir -p _site/examples _site/build/wasm/bin
+          cp -R examples/web _site/examples/
+          cp build/wasm/bin/*.js _site/build/wasm/bin/
+          cp build/wasm/bin/*.wasm _site/build/wasm/bin/
+          touch _site/.nojekyll
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <meta http-equiv="refresh" content="0; url=examples/web/">
+              <title>CIRCT WASM Runner</title>
+              <link rel="canonical" href="examples/web/">
+            </head>
+            <body>
+              <p><a href="examples/web/">Open CIRCT WASM Runner</a></p>
+            </body>
+          </html>
+          HTML
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy Pages
+    runs-on: ubuntu-24.04
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

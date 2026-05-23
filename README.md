@@ -74,3 +74,8 @@ script in an already patched checkout is fine.
 `main`, and manual dispatches. The workflow checks out submodules, installs the
 Emscripten SDK, builds the configured tools, runs the smoke test, and uploads the
 `.js` and `.wasm` outputs as an artifact.
+
+`.github/workflows/pages.yml` builds the same browser-compatible tools on pushes
+to `main` and deploys `examples/web/` plus the generated `build/wasm/bin`
+payloads to GitHub Pages. The Pages root redirects to `examples/web/`, so the
+runner can be opened from the repository's Pages URL.
