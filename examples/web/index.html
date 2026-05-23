@@ -48,7 +48,14 @@
         </div>
         <div class="pane">
           <div class="pane-title">
-            <span>Output</span>
+            <div class="pane-heading">
+              <span>Output</span>
+              <div class="copy-actions" aria-label="Copy output to tool">
+                <button type="button" data-copy-output="circt-synth">to synth</button>
+                <button type="button" data-copy-output="circt-verilog">to verilog</button>
+                <button type="button" data-copy-output="arcilator">to arcilator</button>
+              </div>
+            </div>
             <span id="status">Idle</span>
           </div>
           <pre id="output"></pre>

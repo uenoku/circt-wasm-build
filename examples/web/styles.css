@@ -170,6 +170,26 @@ input {
   font-size: 12px;
 }
 
+.pane-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.copy-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.copy-actions button {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 #status {
   color: var(--accent);
   font-weight: 650;
@@ -290,5 +310,11 @@ pre {
 
   .pane:last-child {
     border-bottom: 0;
+  }
+
+  .pane-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
   }
 }

@@ -94,6 +94,7 @@ const argsInput = document.querySelector("#args");
 const toolBaseInput = document.querySelector("#tool-base");
 const inputTitle = document.querySelector("#input-title");
 const toolButtons = [...document.querySelectorAll("[data-tool]")];
+const copyOutputButtons = [...document.querySelectorAll("[data-copy-output]")];
 
 toolBaseInput.value = new URL("../../build/wasm/bin/", window.location.href).href;
 
@@ -198,7 +199,7 @@ function parseArgs(value) {
   });
 }
 
-function setTool(tool) {
+function setTool(tool, sourceOverride = null) {
   state.tool = tool;
   const example = examples[tool];
   toolButtons.forEach((button) => {
@@ -207,9 +208,16 @@ function setTool(tool) {
   inputTitle.textContent = example.title;
   argsInput.value = example.args;
   setEditorLanguage(example.language);
-  setSourceText(example.source);
+  setSourceText(sourceOverride ?? example.source);
   output.textContent = "";
-  status.textContent = "Idle";
+  status.textContent = sourceOverride === null ? "Idle" : "Copied";
+  setCopyOutputEnabled(false);
+}
+
+function setCopyOutputEnabled(enabled) {
+  copyOutputButtons.forEach((button) => {
+    button.disabled = !enabled;
+  });
 }
 
 function setBusy(busy) {
@@ -217,6 +225,9 @@ function setBusy(busy) {
   resetButton.disabled = busy;
   toolButtons.forEach((button) => {
     button.disabled = busy;
+  });
+  copyOutputButtons.forEach((button) => {
+    button.disabled = busy || output.textContent.length === 0;
   });
 }
 
@@ -243,6 +254,7 @@ async function runTool() {
       const text = [message.stdout, message.stderr].filter(Boolean).join("\n");
       output.textContent = text || `(exit ${message.code})`;
       status.textContent = message.code === 0 ? "Done" : `Exit ${message.code}`;
+      setCopyOutputEnabled(output.textContent.length > 0);
       worker.terminate();
       setBusy(false);
     }
@@ -251,13 +263,25 @@ async function runTool() {
   worker.onerror = (event) => {
     output.textContent = event.message;
     status.textContent = "Error";
+    setCopyOutputEnabled(output.textContent.length > 0);
     worker.terminate();
     setBusy(false);
   };
 }
 
+function copyOutputToTool(tool) {
+  const text = output.textContent;
+  if (!text)
+    return;
+  setTool(tool, text);
+}
+
 toolButtons.forEach((button) => {
   button.addEventListener("click", () => setTool(button.dataset.tool));
+});
+
+copyOutputButtons.forEach((button) => {
+  button.addEventListener("click", () => copyOutputToTool(button.dataset.copyOutput));
 });
 
 runButton.addEventListener("click", runTool);
