@@ -1,0 +1,201 @@
+diff --git a/include/circt/Dialect/Arc/Runtime/TraceTaps.h b/include/circt/Dialect/Arc/Runtime/TraceTaps.h
+index 4ea9eae06..8e73a9eca 100644
+--- a/include/circt/Dialect/Arc/Runtime/TraceTaps.h
++++ b/include/circt/Dialect/Arc/Runtime/TraceTaps.h
+@@ -42,7 +42,9 @@ struct alignas(8) ArcModelTraceInfo {
+   /// Required capacity in 8 byte increments of the trace buffer
+   uint64_t traceBufferCapacity;
+ };
++#if UINTPTR_MAX == UINT64_MAX
+ static_assert(sizeof(ArcModelTraceInfo) == 4 * 8);
++#endif
+ 
+ namespace circt::arc::runtime {
+ static constexpr uint32_t defaultTraceBufferCapacity = 256 * 1024;
+diff --git a/lib/Conversion/ArcToLLVM/LowerArcToLLVM.cpp b/lib/Conversion/ArcToLLVM/LowerArcToLLVM.cpp
+index e01334ebf..31d44d7d7 100644
+--- a/lib/Conversion/ArcToLLVM/LowerArcToLLVM.cpp
++++ b/lib/Conversion/ArcToLLVM/LowerArcToLLVM.cpp
+@@ -1256,8 +1256,10 @@ struct RuntimeModelOpLowering
+     auto traceInfoStructType = LLVM::LLVMStructType::getLiteral(
+         getContext(),
+         {rewriter.getI64Type(), ptrTy, ptrTy, rewriter.getI64Type()});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(sizeof(ArcModelTraceInfo) == 32 &&
+                   "Unexpected size of ArcModelTraceInfo struct");
++#endif
+ 
+     auto globalSymName =
+         rewriter.getStringAttr("_arc_trace_info_" + op.getName());
+@@ -1289,26 +1291,34 @@ struct RuntimeModelOpLowering
+     initStruct =
+         LLVM::InsertValueOp::create(rewriter, op.getLoc(), initStruct,
+                                     numTraceTapsCst, ArrayRef<int64_t>{0});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(offsetof(ArcModelTraceInfo, numTraceTaps) == 0,
+                   "Unexpected offset of field numTraceTaps");
++#endif
+     // Field: struct ArcTraceTap *traceTaps
+     initStruct =
+         LLVM::InsertValueOp::create(rewriter, op.getLoc(), initStruct,
+                                     traceTapArrayAddr, ArrayRef<int64_t>{1});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(offsetof(ArcModelTraceInfo, traceTaps) == 8,
+                   "Unexpected offset of field traceTaps");
++#endif
+     // Field: const char *traceTapNames
+     initStruct =
+         LLVM::InsertValueOp::create(rewriter, op.getLoc(), initStruct,
+                                     tapNameArrayAddr, ArrayRef<int64_t>{2});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(offsetof(ArcModelTraceInfo, traceTapNames) == 16,
+                   "Unexpected offset of field traceTapNames");
++#endif
+     // Field: uint64_t traceBufferCapacity
+     initStruct =
+         LLVM::InsertValueOp::create(rewriter, op.getLoc(), initStruct,
+                                     bufferCapacityCst, ArrayRef<int64_t>{3});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(offsetof(ArcModelTraceInfo, traceBufferCapacity) == 24,
+                   "Unexpected offset of field traceBufferCapacity");
++#endif
+     LLVM::ReturnOp::create(rewriter, op.getLoc(), initStruct);
+ 
+     return traceInfoGlobalOp;
+@@ -1323,8 +1333,10 @@ struct RuntimeModelOpLowering
+     auto modelInfoStructType = LLVM::LLVMStructType::getLiteral(
+         getContext(),
+         {rewriter.getI64Type(), rewriter.getI64Type(), ptrTy, ptrTy});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(sizeof(ArcRuntimeModelInfo) == 32 &&
+                   "Unexpected size of ArcRuntimeModelInfo struct");
++#endif
+ 
+     rewriter.setInsertionPoint(op);
+     auto traceInfoGlobal = buildTraceInfoStruct(op, rewriter);
+@@ -1375,24 +1387,32 @@ struct RuntimeModelOpLowering
+     // Field: uint64_t apiVersion
+     initStruct = LLVM::InsertValueOp::create(
+         rewriter, op.getLoc(), initStruct, apiVersionCst, ArrayRef<int64_t>{0});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(offsetof(ArcRuntimeModelInfo, apiVersion) == 0,
+                   "Unexpected offset of field apiVersion");
++#endif
+     // Field: uint64_t numStateBytes
+     initStruct =
+         LLVM::InsertValueOp::create(rewriter, op.getLoc(), initStruct,
+                                     numStateBytesCst, ArrayRef<int64_t>{1});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(offsetof(ArcRuntimeModelInfo, numStateBytes) == 8,
+                   "Unexpected offset of field numStateBytes");
++#endif
+     // Field: const char *modelName
+     initStruct = LLVM::InsertValueOp::create(rewriter, op.getLoc(), initStruct,
+                                              nameAddr, ArrayRef<int64_t>{2});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(offsetof(ArcRuntimeModelInfo, modelName) == 16,
+                   "Unexpected offset of field modelName");
++#endif
+     // Field: struct ArcModelTraceInfo *traceInfo
+     initStruct = LLVM::InsertValueOp::create(
+         rewriter, op.getLoc(), initStruct, traceInfoPtr, ArrayRef<int64_t>{3});
++#if UINTPTR_MAX == UINT64_MAX
+     static_assert(offsetof(ArcRuntimeModelInfo, traceInfo) == 24,
+                   "Unexpected offset of field traceInfo");
++#endif
+ 
+     LLVM::ReturnOp::create(rewriter, op.getLoc(), initStruct);
+ 
+diff --git a/lib/Dialect/FIRRTL/FIRRTLOps.cpp b/lib/Dialect/FIRRTL/FIRRTLOps.cpp
+index e6ae1fb8b..088bf1ab4 100644
+--- a/lib/Dialect/FIRRTL/FIRRTLOps.cpp
++++ b/lib/Dialect/FIRRTL/FIRRTLOps.cpp
+@@ -3716,7 +3716,7 @@ FirMemory MemOp::getSummary() {
+         llvm::formatv(
+             "{0}FIRRTLMem_{1}_{2}_{3}_{4}_{5}_{6}_{7}_{8}_{9}_{10}{11}{12}",
+             op.getPrefix().value_or(""), numReadPorts, numWritePorts,
+-            numReadWritePorts, (size_t)width, op.getDepth(),
++            numReadWritePorts, (size_t)width, static_cast<size_t>(op.getDepth()),
+             op.getReadLatency(), op.getWriteLatency(), op.getMaskBits(),
+             (unsigned)op.getRuw(), (unsigned)seq::WUW::PortOrder,
+             clocks.empty() ? "" : "_" + clocks, init ? initStr.str() : ""));
+@@ -3725,7 +3725,7 @@ FirMemory MemOp::getSummary() {
+           numWritePorts,
+           numReadWritePorts,
+           (size_t)width,
+-          op.getDepth(),
++          static_cast<size_t>(op.getDepth()),
+           op.getReadLatency(),
+           op.getWriteLatency(),
+           op.getMaskBits(),
+diff --git a/lib/Dialect/FIRRTL/Transforms/LowerClasses.cpp b/lib/Dialect/FIRRTL/Transforms/LowerClasses.cpp
+index 7c55cedf3..fb3622172 100644
+--- a/lib/Dialect/FIRRTL/Transforms/LowerClasses.cpp
++++ b/lib/Dialect/FIRRTL/Transforms/LowerClasses.cpp
+@@ -533,7 +533,7 @@ PathTracker::processPathTrackers(const AnnoTarget &target) {
+     }
+ 
+     // Get the fieldID.  If there is none, it is assumed to be 0.
+-    uint64_t fieldID = anno.getFieldID();
++    size_t fieldID = static_cast<size_t>(anno.getFieldID());
+ 
+     // Attach an inner sym to the operation.
+     Attribute targetSym;
+diff --git a/lib/Dialect/RTG/Transforms/ElaborationPass.cpp b/lib/Dialect/RTG/Transforms/ElaborationPass.cpp
+index 6258e21bc..e4a1c05cc 100644
+--- a/lib/Dialect/RTG/Transforms/ElaborationPass.cpp
++++ b/lib/Dialect/RTG/Transforms/ElaborationPass.cpp
+@@ -253,7 +253,7 @@ struct SetStorage : CachableStorage {
+ 
+ /// Storage object for an '!rtg.bag<T>'.
+ struct BagStorage {
+-  BagStorage(MapVector<ElaboratorValue, uint64_t> &&bag, Type type)
++  BagStorage(MapVector<ElaboratorValue, size_t> &&bag, Type type)
+       : hashcode(llvm::hash_combine(
+             type, llvm::hash_combine_range(bag.begin(), bag.end()))),
+         bag(std::move(bag)), type(type) {}
+@@ -268,7 +268,7 @@ struct BagStorage {
+ 
+   // Stores the elaborated values contained in the bag with their number of
+   // occurences.
+-  const MapVector<ElaboratorValue, uint64_t> bag;
++  const MapVector<ElaboratorValue, size_t> bag;
+ 
+   // Store the bag type such that we can materialize this evaluated value
+   // also in the case where the bag is empty.
+@@ -1583,7 +1583,7 @@ public:
+ 
+   FailureOr<DeletionKind> visitOp(SetConvertToBagOp op) {
+     auto set = get<SetStorage *>(op.getInput())->set;
+-    MapVector<ElaboratorValue, uint64_t> bag;
++    MapVector<ElaboratorValue, size_t> bag;
+     for (auto val : set)
+       bag.insert({val, 1});
+     state[op.getResult()] = sharedState.internalizer.internalize<BagStorage>(
+@@ -1592,7 +1592,7 @@ public:
+   }
+ 
+   FailureOr<DeletionKind> visitOp(BagCreateOp op) {
+-    MapVector<ElaboratorValue, uint64_t> bag;
++    MapVector<ElaboratorValue, size_t> bag;
+     for (auto [val, multiple] :
+          llvm::zip(op.getElements(), op.getMultiples())) {
+       // If the multiple is not stored as an AttributeValue, the elaboration
+@@ -1635,7 +1635,7 @@ public:
+     auto original = get<BagStorage *>(op.getOriginal())->bag;
+     auto diff = get<BagStorage *>(op.getDiff())->bag;
+ 
+-    MapVector<ElaboratorValue, uint64_t> result;
++    MapVector<ElaboratorValue, size_t> result;
+     for (const auto &el : original) {
+       if (!diff.contains(el.first)) {
+         result.insert(el);
+@@ -1658,7 +1658,7 @@ public:
+   }
+ 
+   FailureOr<DeletionKind> visitOp(BagUnionOp op) {
+-    MapVector<ElaboratorValue, uint64_t> result;
++    MapVector<ElaboratorValue, size_t> result;
+     for (auto bag : op.getBags()) {
+       auto val = get<BagStorage *>(bag)->bag;
+       for (auto [el, multiple] : val)

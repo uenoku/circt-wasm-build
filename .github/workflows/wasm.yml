@@ -1,0 +1,86 @@
+name: WASM
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: CMake targets to build
+        default: "circt-opt firtool"
+        required: false
+      emsdk-version:
+        description: Emscripten SDK version
+        default: latest
+        required: false
+
+concurrency:
+  group: wasm-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build CIRCT WASM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CIRCT_WASM_TARGETS: ${{ github.event.inputs.targets || 'circt-opt firtool' }}
+      EMSDK_VERSION: ${{ github.event.inputs['emsdk-version'] || 'latest' }}
+      CMAKE_BUILD_PARALLEL_LEVEL: 8
+      LLVM_ENABLE_ASSERTIONS: ON
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install host packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build python3 git ca-certificates
+
+      - name: Cache Emscripten SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/emsdk
+            .cache/emscripten
+          key: emsdk-${{ runner.os }}-${{ env.EMSDK_VERSION }}
+
+      - name: Install Emscripten SDK
+        shell: bash
+        run: |
+          if [[ ! -d "${RUNNER_TEMP}/emsdk/.git" ]]; then
+            rm -rf "${RUNNER_TEMP}/emsdk"
+            git clone https://github.com/emscripten-core/emsdk.git "${RUNNER_TEMP}/emsdk"
+          else
+            git -C "${RUNNER_TEMP}/emsdk" pull --ff-only
+          fi
+          "${RUNNER_TEMP}/emsdk/emsdk" install "${EMSDK_VERSION}"
+          "${RUNNER_TEMP}/emsdk/emsdk" activate "${EMSDK_VERSION}"
+
+      - name: Build WASM tools
+        shell: bash
+        run: |
+          source "${RUNNER_TEMP}/emsdk/emsdk_env.sh"
+          ./scripts/build-wasm.sh
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          source "${RUNNER_TEMP}/emsdk/emsdk_env.sh"
+          ./scripts/smoke-test.sh
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: circt-wasm
+          path: |
+            build/wasm/bin/circt-opt.js
+            build/wasm/bin/circt-opt.wasm
+            build/wasm/bin/firtool.js
+            build/wasm/bin/firtool.wasm
+          if-no-files-found: error

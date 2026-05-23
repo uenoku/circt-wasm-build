@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CIRCT WASM Runner</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <h1>CIRCT WASM Runner</h1>
+          <p>firtool and circt-opt in the browser</p>
+        </div>
+        <button id="run" type="button">Run</button>
+      </header>
+
+      <section class="toolbar" aria-label="Tool settings">
+        <div class="segmented" role="tablist" aria-label="Tool">
+          <button class="active" type="button" data-tool="firtool">firtool</button>
+          <button type="button" data-tool="circt-opt">circt-opt</button>
+        </div>
+        <label>
+          Args
+          <input id="args" spellcheck="false" value="">
+        </label>
+        <label>
+          Tool path
+          <input id="tool-base" spellcheck="false">
+        </label>
+      </section>
+
+      <section class="workspace">
+        <div class="pane">
+          <div class="pane-title">
+            <span id="input-title">FIRRTL</span>
+            <button id="reset" type="button">Reset</button>
+          </div>
+          <textarea id="source" spellcheck="false"></textarea>
+        </div>
+        <div class="pane">
+          <div class="pane-title">
+            <span>Output</span>
+            <span id="status">Idle</span>
+          </div>
+          <pre id="output"></pre>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
