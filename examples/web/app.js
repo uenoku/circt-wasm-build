@@ -46,6 +46,19 @@ circuit FIRFilter:
 }
 `,
   },
+  "circt-verilog": {
+    title: "SystemVerilog",
+    file: "input.sv",
+    args: "--format=sv --ir-hw",
+    source: `module add4(
+  input  logic [3:0] a,
+  input  logic [3:0] b,
+  output logic [4:0] y
+);
+  assign y = a + b;
+endmodule
+`,
+  },
 };
 
 const state = {
