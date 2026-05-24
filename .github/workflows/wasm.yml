@@ -54,9 +54,17 @@ jobs:
         if: ${{ env.CIRCT_REF != '' }}
         shell: bash
         run: |
-          git -C circt fetch --tags origin
+          if ! git -C circt rev-parse --verify --quiet "${CIRCT_REF}^{commit}" >/dev/null; then
+            if ! git -C circt fetch --no-recurse-submodules --depth=1 origin \
+              "+refs/tags/${CIRCT_REF}:refs/tags/${CIRCT_REF}"; then
+              git -C circt fetch --no-recurse-submodules --depth=1 origin "${CIRCT_REF}"
+            fi
+          fi
           git -C circt checkout --detach "${CIRCT_REF}"
-          git -C circt submodule update --init --recursive
+          git -C circt submodule sync --recursive
+          if ! git -C circt submodule update --init --recursive --depth=1; then
+            git -C circt submodule update --init --recursive
+          fi
 
       - name: Install host packages
         run: |
