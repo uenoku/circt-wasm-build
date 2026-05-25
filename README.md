@@ -4,6 +4,8 @@ This repository builds selected [CIRCT](https://github.com/llvm/circt) tools to
 WebAssembly with Emscripten. CIRCT is tracked as a submodule so the build is
 repeatable against a pinned upstream revision.
 
+https://uenoku.github.io/circt-wasm-build/
+
 ## Quick Start
 
 Install the host dependencies:
