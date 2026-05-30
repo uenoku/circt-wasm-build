@@ -73,7 +73,7 @@ EXTERNAL_CMAKE_ARGS=(
 )
 
 if [[ "$MOCKTURTLE_ENABLED" == "ON" ]]; then
-  if [[ ! -d "$MOCKTURTLE_PLUGIN_SRC" ]]; then
+  if [[ ! -f "$MOCKTURTLE_PLUGIN_SRC/CMakeLists.txt" ]]; then
     echo "Initializing circt-mockturtle-plugin submodule"
     git -C "$ROOT_DIR" submodule update --init circt-mockturtle-plugin
   fi
