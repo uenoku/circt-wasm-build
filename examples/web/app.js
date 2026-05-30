@@ -81,14 +81,53 @@ endmodule
   },
 };
 
+function encodeUrlText(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize)
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+function decodeUrlText(value) {
+  try {
+    const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function readUrlState() {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  const tool = params.get("tool");
+  const input = params.get("input");
+  const decodedInput = input === null ? null : decodeUrlText(input);
+
+  return {
+    tool: Object.prototype.hasOwnProperty.call(examples, tool) ? tool : null,
+    args: params.get("args"),
+    input: decodedInput,
+    hasInput: decodedInput !== null,
+    version: params.get("version"),
+  };
+}
+
+const initialUrlState = readUrlState();
+
 const state = {
-  tool: "firtool",
+  tool: initialUrlState.tool ?? "circt-verilog",
 };
 
 const source = document.querySelector("#source");
 const output = document.querySelector("#output");
 const status = document.querySelector("#status");
 const runButton = document.querySelector("#run");
+const shareButtons = [...document.querySelectorAll("[data-share-url]")];
 const resetButton = document.querySelector("#reset");
 const argsInput = document.querySelector("#args");
 const versionSelect = document.querySelector("#version");
@@ -198,7 +237,7 @@ function setVersion(version) {
     toolBaseInput.value = localToolBase;
 }
 
-async function loadVersionManifest() {
+async function loadVersionManifest(preferredVersionId = null) {
   const manifestUrl = new URL("../../wasm/manifest.json", window.location.href);
   let manifest;
 
@@ -229,9 +268,11 @@ async function loadVersionManifest() {
     versionSelect.append(option);
   }
 
-  const selectedId = versions.some((version) => version.id === manifest.default)
-    ? manifest.default
-    : versions[0].id;
+  let selectedId = versions[0].id;
+  if (versions.some((version) => version.id === manifest.default))
+    selectedId = manifest.default;
+  if (versions.some((version) => version.id === preferredVersionId))
+    selectedId = preferredVersionId;
   versionSelect.value = selectedId;
   versionSelect.disabled = false;
   setVersion(versions.find((version) => version.id === selectedId));
@@ -251,18 +292,21 @@ function parseArgs(value) {
   });
 }
 
-function setTool(tool, sourceOverride = null) {
+function setTool(
+  tool,
+  { sourceOverride = null, argsOverride = null, statusText = "Idle" } = {},
+) {
   state.tool = tool;
   const example = examples[tool];
   toolButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.tool === tool);
   });
   inputTitle.textContent = example.title;
-  argsInput.value = example.args;
+  argsInput.value = argsOverride ?? example.args;
   setEditorLanguage(example.language);
   setSourceText(sourceOverride ?? example.source);
   output.textContent = "";
-  status.textContent = sourceOverride === null ? "Idle" : "Copied";
+  status.textContent = statusText;
   setCopyOutputEnabled(false);
 }
 
@@ -274,6 +318,9 @@ function setCopyOutputEnabled(enabled) {
 
 function setBusy(busy) {
   runButton.disabled = busy;
+  shareButtons.forEach((button) => {
+    button.disabled = busy;
+  });
   resetButton.disabled = busy;
   toolButtons.forEach((button) => {
     button.disabled = busy;
@@ -325,7 +372,33 @@ function copyOutputToTool(tool) {
   const text = output.textContent;
   if (!text)
     return;
-  setTool(tool, text);
+  setTool(tool, { sourceOverride: text, statusText: "Copied" });
+}
+
+function makeShareUrl() {
+  const params = new URLSearchParams();
+  params.set("tool", state.tool);
+  params.set("args", argsInput.value);
+  params.set("input", encodeUrlText(sourceText()));
+
+  if (!versionSelect.disabled)
+    params.set("version", versionSelect.value);
+
+  const url = new URL(window.location.href);
+  url.hash = params.toString();
+  return url;
+}
+
+async function shareUrl() {
+  const url = makeShareUrl();
+  history.replaceState(null, "", url);
+
+  try {
+    await navigator.clipboard.writeText(url.href);
+    status.textContent = "URL copied";
+  } catch {
+    status.textContent = "URL updated";
+  }
 }
 
 toolButtons.forEach((button) => {
@@ -337,7 +410,14 @@ copyOutputButtons.forEach((button) => {
 });
 
 runButton.addEventListener("click", runTool);
+shareButtons.forEach((button) => {
+  button.addEventListener("click", shareUrl);
+});
 resetButton.addEventListener("click", () => setTool(state.tool));
 
-setTool(state.tool);
-loadVersionManifest();
+setTool(state.tool, {
+  sourceOverride: initialUrlState.hasInput ? initialUrlState.input : null,
+  argsOverride: initialUrlState.args,
+  statusText: initialUrlState.hasInput || initialUrlState.args !== null ? "Loaded" : "Idle",
+});
+loadVersionManifest(initialUrlState.version);

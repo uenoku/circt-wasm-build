@@ -17,15 +17,18 @@
           <h1>CIRCT WASM Runner</h1>
           <p>CIRCT tools in the browser</p>
         </div>
-        <button id="run" type="button">Run</button>
+        <div class="top-actions">
+          <button type="button" data-share-url>Share URL</button>
+          <button id="run" type="button">Run</button>
+        </div>
       </header>
 
       <section class="toolbar" aria-label="Tool settings">
         <div class="segmented" role="tablist" aria-label="Tool">
-          <button class="active" type="button" data-tool="firtool">firtool</button>
+          <button class="active" type="button" data-tool="circt-verilog">circt-verilog</button>
+          <button type="button" data-tool="firtool">firtool</button>
           <button type="button" data-tool="circt-opt">circt-opt</button>
           <button type="button" data-tool="circt-synth">circt-synth</button>
-          <button type="button" data-tool="circt-verilog">circt-verilog</button>
           <button type="button" data-tool="arcilator">arcilator</button>
         </div>
         <label>
@@ -47,8 +50,11 @@
       <section class="workspace">
         <div class="pane">
           <div class="pane-title">
-            <span id="input-title">FIRRTL</span>
-            <button id="reset" type="button">Reset</button>
+            <span id="input-title">SystemVerilog</span>
+            <div class="pane-actions">
+              <button type="button" data-share-url>Copy Link</button>
+              <button id="reset" type="button">Reset</button>
+            </div>
           </div>
           <textarea id="source" spellcheck="false"></textarea>
         </div>

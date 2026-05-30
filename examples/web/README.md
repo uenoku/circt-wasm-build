@@ -21,3 +21,7 @@ On GitHub Pages, the page reads `wasm/manifest.json` and switches the tool path
 to the selected version, for example `wasm/current/bin/` or a CIRCT release
 label published by the workflow. If the manifest is not present, the version
 selector is disabled and the local `build/wasm/bin` path is used.
+
+Use the `Share URL` or input-pane `Copy Link` button to embed the selected tool,
+arguments, and input text in the URL hash. Opening that URL restores the editor
+state without sending the input to a server.
