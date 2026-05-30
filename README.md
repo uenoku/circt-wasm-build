@@ -29,6 +29,15 @@ and `arcilator` into `build/wasm/bin`. The Emscripten build enables CIRCT's
 CaDiCaL integration by default, which gives synthesis passes an in-process SAT
 solver. It also enables the slang-backed Verilog frontend by default.
 
+The optional `circt-mockturtle-opt` target can also be built to WASM. It is
+backed by the `circt-mockturtle-plugin` submodule, which fetches its pinned
+mockturtle dependency during CMake configuration:
+
+```sh
+CIRCT_MOCKTURTLE_ENABLED=ON ./scripts/build-wasm.sh
+CIRCT_MOCKTURTLE_ENABLED=ON ./scripts/smoke-test.sh
+```
+
 ## Configuration
 
 The scripts are configured through environment variables:
@@ -38,6 +47,8 @@ The scripts are configured through environment variables:
 | `CIRCT_WASM_TARGETS` | `circt-opt firtool circt-synth circt-verilog arcilator` | CMake targets to build. |
 | `CIRCT_CADICAL_ENABLED` | `ON` | Enable CIRCT's CaDiCaL SAT solver in the Emscripten build. |
 | `CIRCT_SLANG_FRONTEND_ENABLED` | `ON` | Enable CIRCT's slang-backed Verilog frontend in the Emscripten build. |
+| `CIRCT_MOCKTURTLE_ENABLED` | `OFF` | Enable the out-of-tree mockturtle project and add `circt-mockturtle-opt` to the default target set. |
+| `CIRCT_MOCKTURTLE_PLUGIN_SRC` | `circt-mockturtle-plugin` | Path to the CIRCT mockturtle plugin checkout. |
 | `CIRCT_WASM_BUILD_DIR` | `build/wasm` | Emscripten build directory. |
 | `CIRCT_WASM_HOST_BUILD_DIR` | `build/host` | Native build directory for tablegen tools. |
 | `CIRCT_WASM_PATCH_DIR` | `patches` | Patch directory applied to the CIRCT submodule before build. |

@@ -12,10 +12,12 @@ Serve the repository root, then open `examples/web/`:
 python3 -m http.server 8000
 ```
 
-The page expects `firtool`, `circt-opt`, `circt-synth`, `circt-verilog`, and
-`arcilator` launchers and wasm payloads to exist under `build/wasm/bin`. Tools
-are loaded by the worker when a run starts, so larger payloads are fetched only
-when the corresponding tool is used.
+The page expects launchers and wasm payloads to exist under `build/wasm/bin`.
+The default build provides `circt-verilog`, `firtool`, `circt-opt`,
+`circt-synth`, and `arcilator`. If `CIRCT_MOCKTURTLE_ENABLED=ON` was used, the
+runner can also launch `circt-mockturtle-opt`. Tools are loaded by the worker
+when a run starts, so larger payloads are fetched only when the corresponding
+tool is used.
 
 On GitHub Pages, the page reads `wasm/manifest.json` and switches the tool path
 to the selected version, for example `wasm/current/bin/` or a CIRCT release

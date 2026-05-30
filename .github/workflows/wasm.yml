@@ -9,7 +9,7 @@ on:
     inputs:
       targets:
         description: CMake targets to build
-        default: "circt-opt firtool circt-synth circt-verilog arcilator"
+        default: "circt-opt firtool circt-synth circt-verilog arcilator circt-mockturtle-opt"
         required: false
       emsdk-version:
         description: Emscripten SDK version
@@ -23,6 +23,11 @@ on:
         description: Version label to publish on Pages
         default: ""
         required: false
+      mockturtle-enabled:
+        description: Build circt-mockturtle-opt from the optional mockturtle plugin submodule
+        default: true
+        required: false
+        type: boolean
       deploy-pages:
         description: Deploy the built web page to GitHub Pages
         default: true
@@ -38,7 +43,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
-      CIRCT_WASM_TARGETS: ${{ github.event.inputs.targets || 'circt-opt firtool circt-synth circt-verilog arcilator' }}
+      CIRCT_WASM_TARGETS: ${{ github.event.inputs.targets || 'circt-opt firtool circt-synth circt-verilog arcilator circt-mockturtle-opt' }}
+      CIRCT_MOCKTURTLE_ENABLED: ${{ (github.event_name != 'workflow_dispatch' || inputs['mockturtle-enabled']) && 'ON' || 'OFF' }}
       EMSDK_VERSION: ${{ github.event.inputs['emsdk-version'] || 'latest' }}
       CIRCT_REF: ${{ inputs['circt-ref'] || '' }}
       CMAKE_BUILD_PARALLEL_LEVEL: 8
@@ -48,7 +54,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
+
+      - name: Initialize CIRCT submodule
+        run: git submodule update --init circt
 
       - name: Select CIRCT ref
         if: ${{ env.CIRCT_REF != '' }}
@@ -75,7 +84,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/host
-          key: host-tablegen-${{ runner.os }}-${{ env.LLVM_ENABLE_ASSERTIONS }}-${{ hashFiles('circt/.git', '.git/modules/circt/HEAD', 'scripts/build-wasm.sh', 'patches/*.patch') }}
+          key: host-tablegen-${{ runner.os }}-${{ env.LLVM_ENABLE_ASSERTIONS }}-${{ hashFiles('circt/.git', '.git/modules/circt/HEAD', '.gitmodules', 'scripts/build-wasm.sh', 'patches/**/*.patch') }}
 
       - name: Cache Emscripten SDK
         uses: actions/cache@v4
@@ -101,12 +110,20 @@ jobs:
         shell: bash
         run: |
           source "${RUNNER_TEMP}/emsdk/emsdk_env.sh"
+          if [[ "${CIRCT_MOCKTURTLE_ENABLED}" == "ON" &&
+                " ${CIRCT_WASM_TARGETS} " != *" circt-mockturtle-opt "* ]]; then
+            export CIRCT_WASM_TARGETS="${CIRCT_WASM_TARGETS} circt-mockturtle-opt"
+          fi
           ./scripts/build-wasm.sh
 
       - name: Smoke test
         shell: bash
         run: |
           source "${RUNNER_TEMP}/emsdk/emsdk_env.sh"
+          if [[ "${CIRCT_MOCKTURTLE_ENABLED}" == "ON" &&
+                " ${CIRCT_WASM_TARGETS} " != *" circt-mockturtle-opt "* ]]; then
+            export CIRCT_WASM_TARGETS="${CIRCT_WASM_TARGETS} circt-mockturtle-opt"
+          fi
           ./scripts/smoke-test.sh
 
       - name: Upload WASM artifact
@@ -124,6 +141,8 @@ jobs:
             build/wasm/bin/circt-verilog.wasm
             build/wasm/bin/arcilator.js
             build/wasm/bin/arcilator.wasm
+            build/wasm/bin/circt-mockturtle-opt.js
+            build/wasm/bin/circt-mockturtle-opt.wasm
           if-no-files-found: error
 
   deploy-pages:

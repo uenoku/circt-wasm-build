@@ -1,3 +1,6 @@
 [submodule "circt"]
 	path = circt
 	url = https://github.com/llvm/circt
+[submodule "circt-mockturtle-plugin"]
+	path = circt-mockturtle-plugin
+	url = https://github.com/uenoku/circt-mockturtle-plugin.git

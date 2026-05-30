@@ -3,7 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WASM_BUILD_DIR="${CIRCT_WASM_BUILD_DIR:-$ROOT_DIR/build/wasm}"
-TARGETS="${CIRCT_WASM_TARGETS:-circt-opt firtool circt-synth circt-verilog arcilator}"
+DEFAULT_TARGETS="circt-opt firtool circt-synth circt-verilog arcilator"
+TARGETS="${CIRCT_WASM_TARGETS:-$DEFAULT_TARGETS}"
+
+if [[ "${CIRCT_MOCKTURTLE_ENABLED:-OFF}" == "ON" && -z "${CIRCT_WASM_TARGETS:-}" ]]; then
+  TARGETS="$TARGETS circt-mockturtle-opt"
+fi
 
 if ! command -v node >/dev/null 2>&1; then
   echo "error: node is required to run Emscripten outputs" >&2
@@ -58,6 +63,24 @@ FIR
   )"
   if [[ "$firtool_output" != *"module FIRFilter"* ]]; then
     echo "error: firtool sample did not emit FIRFilter Verilog" >&2
+    exit 1
+  fi
+fi
+
+if [[ " $TARGETS " == *" circt-mockturtle-opt "* ]]; then
+  echo "Smoke testing circt-mockturtle-opt AIG stats"
+  mockturtle_output="$(
+    node "$WASM_BUILD_DIR/bin/circt-mockturtle-opt.js" \
+      --synth-mockturtle-aig-stats - <<'MLIR'
+hw.module @simple(in %a : i1, in %b : i1, in %c : i1, out out : i1) {
+  %0 = synth.aig.and_inv %a, %b : i1
+  %1 = synth.aig.and_inv %0, not %c : i1
+  hw.output %1 : i1
+}
+MLIR
+  )"
+  if [[ "$mockturtle_output" != *"mockturtle.aig_gates = 2"* ]]; then
+    echo "error: circt-mockturtle-opt sample did not annotate AIG gate count" >&2
     exit 1
   fi
 fi

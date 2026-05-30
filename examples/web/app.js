@@ -49,6 +49,18 @@ circuit FIRFilter:
 }
 `,
   },
+  "circt-mockturtle-opt": {
+    title: "Mockturtle MLIR",
+    language: "mlir",
+    file: "input.mlir",
+    args: "--synth-mockturtle-aig-stats",
+    source: `hw.module @simple(in %a : i1, in %b : i1, in %c : i1, out out : i1) {
+  %0 = synth.aig.and_inv %a, %b : i1
+  %1 = synth.aig.and_inv %0, not %c : i1
+  hw.output %1 : i1
+}
+`,
+  },
   "circt-verilog": {
     title: "SystemVerilog",
     language: "sv",

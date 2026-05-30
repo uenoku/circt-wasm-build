@@ -7,9 +7,12 @@ HOST_BUILD_DIR="${CIRCT_WASM_HOST_BUILD_DIR:-$ROOT_DIR/build/host}"
 WASM_BUILD_DIR="${CIRCT_WASM_BUILD_DIR:-$ROOT_DIR/build/wasm}"
 BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 ASSERTIONS="${LLVM_ENABLE_ASSERTIONS:-ON}"
-TARGETS="${CIRCT_WASM_TARGETS:-circt-opt firtool circt-synth circt-verilog arcilator}"
+DEFAULT_TARGETS="circt-opt firtool circt-synth circt-verilog arcilator"
+TARGETS="${CIRCT_WASM_TARGETS:-$DEFAULT_TARGETS}"
 CADICAL_ENABLED="${CIRCT_CADICAL_ENABLED:-ON}"
 SLANG_FRONTEND_ENABLED="${CIRCT_SLANG_FRONTEND_ENABLED:-ON}"
+MOCKTURTLE_ENABLED="${CIRCT_MOCKTURTLE_ENABLED:-OFF}"
+MOCKTURTLE_PLUGIN_SRC="${CIRCT_MOCKTURTLE_PLUGIN_SRC:-$ROOT_DIR/circt-mockturtle-plugin}"
 
 if ! command -v cmake >/dev/null 2>&1; then
   echo "error: cmake is required" >&2
@@ -26,6 +29,28 @@ if ! command -v emcmake >/dev/null 2>&1; then
   exit 1
 fi
 
+apply_patches() {
+  local source_dir="$1"
+  local patch_dir="$2"
+  local label="$3"
+
+  [[ -d "$patch_dir" ]] || return 0
+
+  for patch in "$patch_dir"/*.patch; do
+    [[ -e "$patch" ]] || continue
+    if git -C "$source_dir" apply --check "$patch" 2>/dev/null; then
+      echo "Applying $label patch: $(basename "$patch")"
+      git -C "$source_dir" apply "$patch"
+    elif git -C "$source_dir" apply --reverse --check "$patch" 2>/dev/null; then
+      echo "$label patch already applied: $(basename "$patch")"
+    else
+      echo "error: $label patch does not apply cleanly: $patch" >&2
+      git -C "$source_dir" apply --check "$patch"
+      exit 1
+    fi
+  done
+}
+
 if [[ ! -d "$CIRCT_SRC" ]]; then
   echo "Initializing CIRCT submodule"
   git -C "$ROOT_DIR" submodule update --init circt
@@ -41,22 +66,38 @@ if [[ ! -d "$CIRCT_SRC/llvm/llvm" ]]; then
   exit 1
 fi
 
-PATCH_DIR="${CIRCT_WASM_PATCH_DIR:-$ROOT_DIR/patches}"
-if [[ -d "$PATCH_DIR" ]]; then
-  for patch in "$PATCH_DIR"/*.patch; do
-    [[ -e "$patch" ]] || continue
-    if git -C "$CIRCT_SRC" apply --check "$patch" 2>/dev/null; then
-      echo "Applying CIRCT patch: $(basename "$patch")"
-      git -C "$CIRCT_SRC" apply "$patch"
-    elif git -C "$CIRCT_SRC" apply --reverse --check "$patch" 2>/dev/null; then
-      echo "CIRCT patch already applied: $(basename "$patch")"
-    else
-      echo "error: CIRCT patch does not apply cleanly: $patch" >&2
-      git -C "$CIRCT_SRC" apply --check "$patch"
-      exit 1
-    fi
-  done
+EXTERNAL_PROJECTS="circt"
+EXTERNAL_CMAKE_ARGS=(
+  -DLLVM_EXTERNAL_PROJECTS="$EXTERNAL_PROJECTS"
+  -DLLVM_EXTERNAL_CIRCT_SOURCE_DIR="$CIRCT_SRC"
+)
+
+if [[ "$MOCKTURTLE_ENABLED" == "ON" ]]; then
+  if [[ ! -d "$MOCKTURTLE_PLUGIN_SRC" ]]; then
+    echo "Initializing circt-mockturtle-plugin submodule"
+    git -C "$ROOT_DIR" submodule update --init circt-mockturtle-plugin
+  fi
+
+  if [[ ! -f "$MOCKTURTLE_PLUGIN_SRC/CMakeLists.txt" ]]; then
+    echo "error: expected circt-mockturtle-plugin sources at $MOCKTURTLE_PLUGIN_SRC" >&2
+    exit 1
+  fi
+
+  EXTERNAL_PROJECTS="circt;circt-mockturtle-plugin"
+  EXTERNAL_CMAKE_ARGS=(
+    -DLLVM_EXTERNAL_PROJECTS="$EXTERNAL_PROJECTS"
+    -DLLVM_EXTERNAL_CIRCT_SOURCE_DIR="$CIRCT_SRC"
+    -DLLVM_EXTERNAL_CIRCT_MOCKTURTLE_PLUGIN_SOURCE_DIR="$MOCKTURTLE_PLUGIN_SRC"
+    -DCIRCT_MOCKTURTLE_INCLUDE_TESTS=OFF
+  )
+
+  if [[ -z "${CIRCT_WASM_TARGETS:-}" ]]; then
+    TARGETS="$TARGETS circt-mockturtle-opt"
+  fi
 fi
+
+PATCH_DIR="${CIRCT_WASM_PATCH_DIR:-$ROOT_DIR/patches}"
+apply_patches "$CIRCT_SRC" "$PATCH_DIR" "CIRCT"
 
 if [[ -n "${CMAKE_BUILD_PARALLEL_LEVEL:-}" ]]; then
   PARALLEL_ARGS=(--parallel "$CMAKE_BUILD_PARALLEL_LEVEL")
@@ -70,12 +111,12 @@ COMMON_CMAKE_ARGS=(
   -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
   -DLLVM_ENABLE_ASSERTIONS="$ASSERTIONS"
   -DLLVM_ENABLE_PROJECTS=mlir
-  -DLLVM_EXTERNAL_PROJECTS=circt
-  -DLLVM_EXTERNAL_CIRCT_SOURCE_DIR="$CIRCT_SRC"
+  "${EXTERNAL_CMAKE_ARGS[@]}"
   -DLLVM_INCLUDE_BENCHMARKS=OFF
   -DLLVM_INCLUDE_DOCS=OFF
   -DLLVM_INCLUDE_EXAMPLES=OFF
   -DLLVM_INCLUDE_TESTS=OFF
+  -DLLVM_INSTALL_TOOLCHAIN_ONLY=ON
   -DMLIR_INCLUDE_DOCS=OFF
   -DMLIR_INCLUDE_TESTS=OFF
   -DCIRCT_INCLUDE_DOCS=OFF
@@ -123,6 +164,14 @@ patch_wasm_tablegen_link_rules() {
   done
 }
 
+patch_wasm_native_configure_rules() {
+  local ninja_file="$WASM_BUILD_DIR/build.ninja"
+  [[ -f "$ninja_file" ]] || return 0
+  [[ "$MOCKTURTLE_ENABLED" == "ON" ]] || return 0
+
+  sed -i "/^  COMMAND = cd .*\\/NATIVE && .*\\/cmake / s|-DCMAKE_BUILD_TYPE=|-DLLVM_INSTALL_TOOLCHAIN_ONLY=ON -DCIRCT_MOCKTURTLE_INCLUDE_TESTS=OFF -DCMAKE_BUILD_TYPE=|" "$ninja_file"
+}
+
 WASM_LINK_FLAGS="${CIRCT_WASM_LINK_FLAGS:--sALLOW_MEMORY_GROWTH=1 -sEXIT_RUNTIME=1 -sENVIRONMENT=web,worker,node}"
 WASM_CXX_FLAGS="${CIRCT_WASM_CXX_FLAGS:-${CMAKE_CXX_FLAGS:-} -Wno-c++11-narrowing}"
 export EM_CACHE="${EM_CACHE:-$ROOT_DIR/.cache/emscripten}"
@@ -167,6 +216,7 @@ emcmake cmake \
 # builds.
 seed_wasm_tablegen_tools
 patch_wasm_tablegen_link_rules
+patch_wasm_native_configure_rules
 
 echo "Building native MLIR helper tools for cross build"
 cmake --build "$WASM_BUILD_DIR" \
@@ -174,12 +224,14 @@ cmake --build "$WASM_BUILD_DIR" \
   "${PARALLEL_ARGS[@]}"
 seed_wasm_tablegen_tools
 patch_wasm_tablegen_link_rules
+patch_wasm_native_configure_rules
 cmake --build "$WASM_BUILD_DIR/NATIVE" \
   --target mlir-linalg-ods-yaml-gen \
   "${PARALLEL_ARGS[@]}"
 
 seed_wasm_tablegen_tools
 patch_wasm_tablegen_link_rules
+patch_wasm_native_configure_rules
 
 cmake -E copy_if_different \
   "$WASM_BUILD_DIR/NATIVE/bin/mlir-linalg-ods-yaml-gen" \
