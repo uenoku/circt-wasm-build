@@ -93,8 +93,7 @@ endmodule
   },
 };
 
-function encodeUrlText(value) {
-  const bytes = new TextEncoder().encode(value);
+function bytesToBase64Url(bytes) {
   let binary = "";
   const chunkSize = 0x8000;
   for (let i = 0; i < bytes.length; i += chunkSize)
@@ -102,23 +101,73 @@ function encodeUrlText(value) {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-function decodeUrlText(value) {
+function base64UrlToBytes(value) {
+  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+async function transformBytes(bytes, format, streamConstructor) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new streamConstructor(format));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+async function encodeUrlText(value) {
+  const bytes = new TextEncoder().encode(value);
+  const plain = bytesToBase64Url(bytes);
+
+  if (typeof CompressionStream === "function") {
+    for (const [prefix, format] of [
+      ["df", "deflate-raw"],
+      ["dz", "deflate"],
+    ]) {
+      try {
+        const compressed = bytesToBase64Url(
+          await transformBytes(bytes, format, CompressionStream),
+        );
+        const encoded = `${prefix}:${compressed}`;
+        if (encoded.length < plain.length)
+          return encoded;
+      } catch {
+        // Try the next encoding. Older browsers may support only some formats.
+      }
+    }
+  }
+
+  return plain;
+}
+
+async function decodeUrlText(value) {
   try {
-    const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    const binary = atob(padded);
-    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    let bytes;
+    const separator = value.indexOf(":");
+    const prefix = separator === -1 ? "" : value.slice(0, separator);
+    const payload = separator === -1 ? value : value.slice(separator + 1);
+
+    if (prefix === "df" || prefix === "dz") {
+      if (typeof DecompressionStream !== "function")
+        return null;
+      bytes = await transformBytes(
+        base64UrlToBytes(payload),
+        prefix === "df" ? "deflate-raw" : "deflate",
+        DecompressionStream,
+      );
+    } else {
+      bytes = base64UrlToBytes(prefix === "b64" ? payload : value);
+    }
+
     return new TextDecoder().decode(bytes);
   } catch {
     return null;
   }
 }
 
-function readUrlState() {
+async function readUrlState() {
   const params = new URLSearchParams(window.location.hash.slice(1));
   const tool = params.get("tool");
   const input = params.get("input");
-  const decodedInput = input === null ? null : decodeUrlText(input);
+  const decodedInput = input === null ? null : await decodeUrlText(input);
 
   return {
     tool: Object.prototype.hasOwnProperty.call(examples, tool) ? tool : null,
@@ -129,10 +178,8 @@ function readUrlState() {
   };
 }
 
-const initialUrlState = readUrlState();
-
 const state = {
-  tool: initialUrlState.tool ?? "circt-verilog",
+  tool: "circt-verilog",
 };
 
 const source = document.querySelector("#source");
@@ -387,11 +434,11 @@ function copyOutputToTool(tool) {
   setTool(tool, { sourceOverride: text, statusText: "Copied" });
 }
 
-function makeShareUrl() {
+async function makeShareUrl() {
   const params = new URLSearchParams();
   params.set("tool", state.tool);
   params.set("args", argsInput.value);
-  params.set("input", encodeUrlText(sourceText()));
+  params.set("input", await encodeUrlText(sourceText()));
 
   if (!versionSelect.disabled)
     params.set("version", versionSelect.value);
@@ -402,14 +449,23 @@ function makeShareUrl() {
 }
 
 async function shareUrl() {
-  const url = makeShareUrl();
-  history.replaceState(null, "", url);
+  setBusy(true);
+  status.textContent = "Encoding URL";
 
   try {
-    await navigator.clipboard.writeText(url.href);
-    status.textContent = "URL copied";
+    const url = await makeShareUrl();
+    history.replaceState(null, "", url);
+
+    try {
+      await navigator.clipboard.writeText(url.href);
+      status.textContent = "URL copied";
+    } catch {
+      status.textContent = "URL updated";
+    }
   } catch {
-    status.textContent = "URL updated";
+    status.textContent = "URL unavailable";
+  } finally {
+    setBusy(false);
   }
 }
 
@@ -427,9 +483,14 @@ shareButtons.forEach((button) => {
 });
 resetButton.addEventListener("click", () => setTool(state.tool));
 
-setTool(state.tool, {
-  sourceOverride: initialUrlState.hasInput ? initialUrlState.input : null,
-  argsOverride: initialUrlState.args,
-  statusText: initialUrlState.hasInput || initialUrlState.args !== null ? "Loaded" : "Idle",
-});
-loadVersionManifest(initialUrlState.version);
+async function initialize() {
+  const initialUrlState = await readUrlState();
+  setTool(initialUrlState.tool ?? state.tool, {
+    sourceOverride: initialUrlState.hasInput ? initialUrlState.input : null,
+    argsOverride: initialUrlState.args,
+    statusText: initialUrlState.hasInput || initialUrlState.args !== null ? "Loaded" : "Idle",
+  });
+  loadVersionManifest(initialUrlState.version);
+}
+
+initialize();
