@@ -29,15 +29,11 @@ circuit FIRFilter:
     title: "MLIR",
     language: "mlir",
     file: "input.mlir",
-    args: "",
-    source: `module {
-  hw.module @ALU(in %a: i8, in %b: i8, in %sel: i1, out y: i8, out carry: i1) {
-    %sum = comb.add %a, %b : i8
-    %xor = comb.xor %a, %b : i8
-    %y = comb.mux %sel, %sum, %xor : i8
-    %carry = comb.extract %sum from 7 : (i8) -> i1
-    hw.output %y, %carry : i8, i1
-  }
+    args: "--pass-pipeline='builtin.module(any(synth-structural-hash))'",
+    source: `hw.module @hash(in %a : i1, in %b : i1, out out0 : i1, out out1 : i1) {
+  %0 = synth.aig.and_inv %a, %b : i1
+  %1 = synth.aig.and_inv %b, %a : i1
+  hw.output %0, %1 : i1, i1
 }
 `,
   },
@@ -107,6 +103,12 @@ endmodule
 };
 
 const presets = {
+  "circt-opt": [
+    {
+      title: "Structural hash",
+      args: "--pass-pipeline='builtin.module(any(synth-structural-hash))'",
+    },
+  ],
   "circt-mockturtle-opt": [
     {
       title: "AIG to XAG + rewrite",
