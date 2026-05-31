@@ -97,7 +97,7 @@ button:disabled {
 
 .toolbar {
   display: grid;
-  grid-template-columns: auto minmax(140px, 220px) minmax(180px, 320px) minmax(240px, 1fr);
+  grid-template-columns: auto minmax(130px, 180px) minmax(190px, 260px) minmax(220px, 1fr) minmax(220px, 1fr);
   align-items: end;
   gap: 12px;
   padding: 12px 24px;

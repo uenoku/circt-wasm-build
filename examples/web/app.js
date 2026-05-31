@@ -31,9 +31,12 @@ circuit FIRFilter:
     file: "input.mlir",
     args: "",
     source: `module {
-  hw.module @Top(out out: i1) {
-    %true = hw.constant true
-    hw.output %true : i1
+  hw.module @ALU(in %a: i8, in %b: i8, in %sel: i1, out y: i8, out carry: i1) {
+    %sum = comb.add %a, %b : i8
+    %xor = comb.xor %a, %b : i8
+    %y = comb.mux %sel, %sum, %xor : i8
+    %carry = comb.extract %sum from 7 : (i8) -> i1
+    hw.output %y, %carry : i8, i1
   }
 }
 `,
@@ -42,10 +45,11 @@ circuit FIRFilter:
     title: "Synthesis MLIR",
     language: "mlir",
     file: "input.mlir",
-    args: "--enable-sop-balancing --convert-to-comb --analysis-output=-",
-    source: `hw.module @add16(in %arg0: i16, in %arg1: i16, out add: i16) {
-  %0 = comb.add %arg0, %arg1 : i16
-  hw.output %0 : i16
+    args: "",
+    source: `hw.module @muladd8(in %a : i8, in %b : i8, in %c : i8, out y : i8) {
+  %mul = comb.mul %a, %b : i8
+  %y = comb.add %mul, %c : i8
+  hw.output %y : i8
 }
 `,
   },
@@ -53,11 +57,14 @@ circuit FIRFilter:
     title: "Mockturtle MLIR",
     language: "mlir",
     file: "input.mlir",
-    args: "--synth-mockturtle-aig-stats",
-    source: `hw.module @simple(in %a : i1, in %b : i1, in %c : i1, out out : i1) {
-  %0 = synth.aig.and_inv %a, %b : i1
-  %1 = synth.aig.and_inv %0, not %c : i1
-  hw.output %1 : i1
+    args: "--synth-mockturtle-aig-to-xag --synth-mockturtle-xag-algebraic-rewrite-depth",
+    source: `hw.module @simple(in %a : i1, in %b : i1, in %c : i1, in %d : i1, out out : i1) {
+  %ab = synth.aig.and_inv %a, %b : i1
+  %bc = synth.aig.and_inv not %b, %c : i1
+  %cd = synth.aig.and_inv %c, not %d : i1
+  %left = synth.aig.and_inv %ab, not %bc : i1
+  %out = synth.aig.and_inv %left, %cd : i1
+  hw.output %out : i1
 }
 `,
   },
@@ -66,12 +73,18 @@ circuit FIRFilter:
     language: "sv",
     file: "input.sv",
     args: "--format=sv --ir-hw",
-    source: `module add4(
-  input  logic [3:0] a,
-  input  logic [3:0] b,
-  output logic [4:0] y
+    source: `module mix8(
+  input  logic [7:0] a,
+  input  logic [7:0] b,
+  input  logic       sel,
+  output logic [8:0] sum,
+  output logic [7:0] y
 );
-  assign y = a + b;
+  logic [7:0] xor_ab;
+
+  assign xor_ab = a ^ b;
+  assign sum = {1'b0, a} + {1'b0, b};
+  assign y = sel ? sum[7:0] : xor_ab;
 endmodule
 `,
   },
@@ -80,17 +93,50 @@ endmodule
     language: "mlir",
     file: "input.mlir",
     args: "--emit-llvm",
-    source: `hw.module @Top(in %clock : !seq.clock, in %i0 : i4, in %i1 : i4, out out : i4) {
-  %0 = comb.add %i0, %i1 : i4
-  %1 = comb.xor %0, %i0 : i4
-  %2 = comb.xor %0, %i1 : i4
-  %foo = seq.compreg %1, %clock : i4
-  %bar = seq.compreg %2, %clock : i4
-  %3 = comb.mul %foo, %bar : i4
-  hw.output %3 : i4
+    source: `hw.module @Top(in %clock : !seq.clock, in %enable : i1, in %a : i8, in %b : i8, out out : i8) {
+  %sum = comb.add %a, %b : i8
+  %xor = comb.xor %a, %b : i8
+  %next = comb.mux %enable, %sum, %xor : i8
+  %acc = seq.compreg %next, %clock : i8
+  %feedback = comb.add %acc, %a : i8
+  %out = comb.xor %feedback, %b : i8
+  hw.output %out : i8
 }
 `,
   },
+};
+
+const presets = {
+  "circt-mockturtle-opt": [
+    {
+      title: "AIG to XAG + rewrite",
+      args: "--synth-mockturtle-aig-to-xag --synth-mockturtle-xag-algebraic-rewrite-depth",
+    },
+    {
+      title: "AIG stats",
+      args: "--synth-mockturtle-aig-stats",
+    },
+    {
+      title: "AIG balance",
+      args: "--synth-mockturtle-aig-balancing",
+    },
+    {
+      title: "AIG resubstitution",
+      args: "--synth-mockturtle-aig-resubstitution",
+    },
+    {
+      title: "AIG to XAG + balance",
+      args: "--synth-mockturtle-aig-to-xag --synth-mockturtle-xag-balancing",
+    },
+    {
+      title: "AIG to MIG + inv opt",
+      args: "--synth-mockturtle-aig-to-mig --synth-mockturtle-mig-inv-propagation --synth-mockturtle-mig-inv-optimization",
+    },
+    {
+      title: "Functional reduction",
+      args: "--synth-mockturtle-functional-reduction",
+    },
+  ],
 };
 
 function bytesToBase64Url(bytes) {
@@ -189,6 +235,7 @@ const runButton = document.querySelector("#run");
 const shareButtons = [...document.querySelectorAll("[data-share-url]")];
 const resetButton = document.querySelector("#reset");
 const argsInput = document.querySelector("#args");
+const presetSelect = document.querySelector("#preset");
 const versionSelect = document.querySelector("#version");
 const toolBaseInput = document.querySelector("#tool-base");
 const inputTitle = document.querySelector("#input-title");
@@ -351,6 +398,38 @@ function parseArgs(value) {
   });
 }
 
+function updatePresetOptions(tool, selectedArgs) {
+  const toolPresets = presets[tool] || [];
+  presetSelect.innerHTML = "";
+
+  if (toolPresets.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Custom";
+    presetSelect.append(option);
+    presetSelect.disabled = true;
+    return;
+  }
+
+  for (const preset of toolPresets) {
+    const option = document.createElement("option");
+    option.value = preset.args;
+    option.textContent = preset.title;
+    option.title = preset.args;
+    presetSelect.append(option);
+  }
+
+  const customOption = document.createElement("option");
+  customOption.value = "";
+  customOption.textContent = "Custom";
+  presetSelect.append(customOption);
+
+  presetSelect.disabled = false;
+  presetSelect.value = toolPresets.some((preset) => preset.args === selectedArgs)
+    ? selectedArgs
+    : "";
+}
+
 function setTool(
   tool,
   { sourceOverride = null, argsOverride = null, statusText = "Idle" } = {},
@@ -362,6 +441,7 @@ function setTool(
   });
   inputTitle.textContent = example.title;
   argsInput.value = argsOverride ?? example.args;
+  updatePresetOptions(tool, argsInput.value);
   setEditorLanguage(example.language);
   setSourceText(sourceOverride ?? example.source);
   output.textContent = "";
@@ -384,6 +464,7 @@ function setBusy(busy) {
   toolButtons.forEach((button) => {
     button.disabled = busy;
   });
+  presetSelect.disabled = busy || (presets[state.tool] || []).length === 0;
   copyOutputButtons.forEach((button) => {
     button.disabled = busy || output.textContent.length === 0;
   });
@@ -478,6 +559,11 @@ copyOutputButtons.forEach((button) => {
 });
 
 runButton.addEventListener("click", runTool);
+presetSelect.addEventListener("change", () => {
+  if (presetSelect.value)
+    argsInput.value = presetSelect.value;
+});
+argsInput.addEventListener("input", () => updatePresetOptions(state.tool, argsInput.value));
 shareButtons.forEach((button) => {
   button.addEventListener("click", shareUrl);
 });
